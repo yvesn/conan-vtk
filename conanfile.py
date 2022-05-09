@@ -16,7 +16,7 @@ import shutil
 
 class vtkConan(ConanFile):
     name = "vtk"
-    version = "9.0.1"
+    version = "9.1.0"
     homepage = "https://www.vtk.org/"
     license = "BSD license"
     url = "https://github.com/darcamo/conan-vtk"
@@ -26,8 +26,16 @@ class vtkConan(ConanFile):
         image processing, and visualization."
 
     settings = "os", "compiler", "build_type", "arch"
-    # options = {"shared": [True, False]}
-    # default_options = "shared=True"
+    options = {
+        "shared": [True, False],
+        "with_python": [True, False],
+        "with_web": [True, False]
+    }
+    default_options = {
+        "shared=False",
+        "with_python": True,
+        "with_web": True,
+    }
     generators = "cmake"
 
     def source(self):
@@ -41,23 +49,6 @@ class vtkConan(ConanFile):
 include(${CMAKE_BINARY_DIR}/conanbuildinfo.cmake)
 conan_basic_setup()
 SET(CMAKE_INSTALL_RPATH "$ORIGIN")""")
-
-        # xxxxxxxxxx Add missing include to some files xxxxxxxxxxxxxxxxxxxxxxxxx
-        # Related issue in vtk repository
-        # https://gitlab.kitware.com/vtk/vtk/-/issues/18194#
-        # After the issue is resolved this block of code should be removed from the recipe
-        for file in [
-                "sources/Common/Core/vtkGenericDataArrayLookupHelper.h",
-                "sources/Common/DataModel/vtkPiecewiseFunction.cxx",
-                "sources/Rendering/Core/vtkColorTransferFunction.cxx"
-        ]:
-            tools.replace_in_file(file, "#include <vector>", """#include <vector>
-#include <limits>""")
-
-        tools.replace_in_file("sources/Filters/HyperTree/vtkHyperTreeGridThreshold.cxx", "#include <cmath>", """#include <cmath>
-#include <limits>""")
-        # xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-
 
     def imports(self):
         self.copy("*.dll", dst="bin", src="bin")
@@ -81,6 +72,13 @@ SET(CMAKE_INSTALL_RPATH "$ORIGIN")""")
         os.mkdir("build")
         shutil.move("conanbuildinfo.cmake", "build/")
         cmake = CMake(self)
+        cmake.definitions["BUILD_TESTING"] = "OFF"
+        cmake.definitions["BUILD_EXAMPLES"] = "OFF"
+        cmake.definitions["BUILD_SHARED_LIBS"] = self.options.shared
+        cmake.definitions["VTK_WRAP_PYTHON"] = "YES" if self.options.with_python else "NO"
+        cmake.definitions["VTK_GROUP_ENABLE_Web"] = "YES" if self.options.with_web else "DEFAULT"
+        cmake.definitions["VTK_MODULE_ENABLE_VTK_WebCore"] = "YES" if self.options.with_web else "DEFAULT"
+        cmake.definitions["VTK_MODULE_ENABLE_VTK_WebGLExporter"] = "YES" if self.options.with_web else "DEFAULT"
         cmake.configure(source_folder="sources", build_folder="build")
         cmake.build()
         cmake.install()
